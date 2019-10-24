@@ -1,18 +1,18 @@
-// Copyright 2015 The go-etherzero Authors
-// This file is part of the go-etherzero library.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-etherzero library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-etherzero library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-etherzero library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package abi
 
@@ -102,6 +102,16 @@ func (arguments Arguments) Unpack(v interface{}, data []byte) error {
 	return arguments.unpackAtomic(v, marshalledValues[0])
 }
 
+// UnpackIntoMap performs the operation hexdata -> mapping of argument name to argument value
+func (arguments Arguments) UnpackIntoMap(v map[string]interface{}, data []byte) error {
+	marshalledValues, err := arguments.UnpackValues(data)
+	if err != nil {
+		return err
+	}
+
+	return arguments.unpackIntoMap(v, marshalledValues)
+}
+
 // unpack sets the unmarshalled value to go format.
 // Note the dst here must be settable.
 func unpack(t *Type, dst interface{}, src interface{}) error {
@@ -109,10 +119,21 @@ func unpack(t *Type, dst interface{}, src interface{}) error {
 		dstVal = reflect.ValueOf(dst).Elem()
 		srcVal = reflect.ValueOf(src)
 	)
-
-	if t.T != TupleTy && !((t.T == SliceTy || t.T == ArrayTy) && t.Elem.T == TupleTy) {
+	tuple, typ := false, t
+	for {
+		if typ.T == SliceTy || typ.T == ArrayTy {
+			typ = typ.Elem
+			continue
+		}
+		tuple = typ.T == TupleTy
+		break
+	}
+	if !tuple {
 		return set(dstVal, srcVal)
 	}
+
+	// Dereferences interface or pointer wrapper
+	dstVal = indirectInterfaceOrPtr(dstVal)
 
 	switch t.T {
 	case TupleTy:
@@ -160,6 +181,19 @@ func unpack(t *Type, dst interface{}, src interface{}) error {
 	return nil
 }
 
+// unpackIntoMap unpacks marshalledValues into the provided map[string]interface{}
+func (arguments Arguments) unpackIntoMap(v map[string]interface{}, marshalledValues []interface{}) error {
+	// Make sure map is not nil
+	if v == nil {
+		return fmt.Errorf("abi: cannot unpack into a nil map")
+	}
+
+	for i, arg := range arguments.NonIndexed() {
+		v[arg.Name] = marshalledValues[i]
+	}
+	return nil
+}
+
 // unpackAtomic unpacks ( hexdata -> go ) a single value
 func (arguments Arguments) unpackAtomic(v interface{}, marshalledValues interface{}) error {
 	if arguments.LengthNonIndexed() == 0 {
@@ -168,7 +202,7 @@ func (arguments Arguments) unpackAtomic(v interface{}, marshalledValues interfac
 	argument := arguments.NonIndexed()[0]
 	elem := reflect.ValueOf(v).Elem()
 
-	if elem.Kind() == reflect.Struct {
+	if elem.Kind() == reflect.Struct && argument.Type.T != TupleTy {
 		fieldmap, err := mapArgNamesToStructFields([]string{argument.Name}, elem)
 		if err != nil {
 			return err

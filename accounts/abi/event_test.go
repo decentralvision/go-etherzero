@@ -1,18 +1,18 @@
-// Copyright 2016 The go-etherzero Authors
-// This file is part of the go-etherzero library.
+// Copyright 2016 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-etherzero library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-etherzero library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-etherzero library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package abi
 
@@ -25,8 +25,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/etherzero/go-etherzero/common"
-	"github.com/etherzero/go-etherzero/crypto"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -104,8 +104,8 @@ func TestEventId(t *testing.T) {
 		}
 
 		for name, event := range abi.Events {
-			if event.Id() != test.expectations[name] {
-				t.Errorf("expected id to be %x, got %x", test.expectations[name], event.Id())
+			if event.ID() != test.expectations[name] {
+				t.Errorf("expected id to be %x, got %x", test.expectations[name], event.ID())
 			}
 		}
 	}
@@ -356,7 +356,7 @@ func unpackTestEventData(dest interface{}, hexData string, jsonEvent []byte, ass
 
 /*
 Taken from
-https://github.com/etherzero/go-etherzero/pull/15568
+https://github.com/ethereum/go-ethereum/pull/15568
 */
 
 type testResult struct {

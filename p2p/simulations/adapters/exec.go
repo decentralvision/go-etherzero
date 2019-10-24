@@ -1,18 +1,18 @@
-// Copyright 2017 The go-etherzero Authors
-// This file is part of the go-etherzero library.
+// Copyright 2017 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-etherzero library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-etherzero library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-etherzero library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package adapters
 
@@ -36,11 +36,11 @@ import (
 	"time"
 
 	"github.com/docker/docker/pkg/reexec"
-	"github.com/etherzero/go-etherzero/log"
-	"github.com/etherzero/go-etherzero/node"
-	"github.com/etherzero/go-etherzero/p2p"
-	"github.com/etherzero/go-etherzero/p2p/enode"
-	"github.com/etherzero/go-etherzero/rpc"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/rpc"
 	"golang.org/x/net/websocket"
 )
 
@@ -92,17 +92,28 @@ func (e *ExecAdapter) NewNode(config *NodeConfig) (Node, error) {
 		return nil, fmt.Errorf("error creating node directory: %s", err)
 	}
 
+	err := config.initDummyEnode()
+	if err != nil {
+		return nil, err
+	}
+
 	// generate the config
 	conf := &execNodeConfig{
 		Stack: node.DefaultConfig,
 		Node:  config,
 	}
-	conf.Stack.DataDir = filepath.Join(dir, "data")
+	if config.DataDir != "" {
+		conf.Stack.DataDir = config.DataDir
+	} else {
+		conf.Stack.DataDir = filepath.Join(dir, "data")
+	}
+
+	// these parameters are crucial for execadapter node to run correctly
 	conf.Stack.WSHost = "127.0.0.1"
 	conf.Stack.WSPort = 0
 	conf.Stack.WSOrigins = []string{"*"}
 	conf.Stack.WSExposeAll = true
-	conf.Stack.P2P.EnableMsgEvents = false
+	conf.Stack.P2P.EnableMsgEvents = config.EnableMsgEvents
 	conf.Stack.P2P.NoDiscovery = true
 	conf.Stack.P2P.NAT = nil
 	conf.Stack.NoUSB = true
@@ -403,6 +414,13 @@ func startExecNodeStack() (*node.Node, error) {
 	if err := json.Unmarshal([]byte(confEnv), &conf); err != nil {
 		return nil, fmt.Errorf("error decoding %s: %v", envNodeConfig, err)
 	}
+
+	// create enode record
+	nodeTcpConn, _ := net.ResolveTCPAddr("tcp", conf.Stack.P2P.ListenAddr)
+	if nodeTcpConn.IP == nil {
+		nodeTcpConn.IP = net.IPv4(127, 0, 0, 1)
+	}
+	conf.Node.initEnode(nodeTcpConn.IP, nodeTcpConn.Port, nodeTcpConn.Port)
 	conf.Stack.P2P.PrivateKey = conf.Node.PrivateKey
 	conf.Stack.Logger = log.New("node.id", conf.Node.ID.String())
 

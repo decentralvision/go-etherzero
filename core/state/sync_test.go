@@ -1,18 +1,18 @@
-// Copyright 2015 The go-etherzero Authors
-// This file is part of the go-etherzero library.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-etherzero library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-etherzero library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-etherzero library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package state
 
@@ -21,10 +21,12 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/etherzero/go-etherzero/common"
-	"github.com/etherzero/go-etherzero/crypto"
-	"github.com/etherzero/go-etherzero/ethdb"
-	"github.com/etherzero/go-etherzero/trie"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/ethdb/memorydb"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 // testAccount is the data associated with an account used by the state tests.
@@ -38,7 +40,7 @@ type testAccount struct {
 // makeTestState create a sample test state to test node-wise reconstruction.
 func makeTestState() (Database, common.Hash, []*testAccount) {
 	// Create an empty state
-	db := NewDatabase(ethdb.NewMemDatabase())
+	db := NewDatabase(rawdb.NewMemoryDatabase())
 	state, _ := New(common.Hash{}, db)
 
 	// Fill it with some arbitrary data
@@ -124,7 +126,7 @@ func checkStateConsistency(db ethdb.Database, root common.Hash) error {
 // Tests that an empty state is not scheduled for syncing.
 func TestEmptyStateSync(t *testing.T) {
 	empty := common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
-	if req := NewStateSync(empty, ethdb.NewMemDatabase()).Missing(1); len(req) != 0 {
+	if req := NewStateSync(empty, rawdb.NewMemoryDatabase(), trie.NewSyncBloom(1, memorydb.New())).Missing(1); len(req) != 0 {
 		t.Errorf("content requested for empty state: %v", req)
 	}
 }
@@ -139,8 +141,8 @@ func testIterativeStateSync(t *testing.T, batch int) {
 	srcDb, srcRoot, srcAccounts := makeTestState()
 
 	// Create a destination state and sync with the scheduler
-	dstDb := ethdb.NewMemDatabase()
-	sched := NewStateSync(srcRoot, dstDb)
+	dstDb := rawdb.NewMemoryDatabase()
+	sched := NewStateSync(srcRoot, dstDb, trie.NewSyncBloom(1, dstDb))
 
 	queue := append([]common.Hash{}, sched.Missing(batch)...)
 	for len(queue) > 0 {
@@ -171,8 +173,8 @@ func TestIterativeDelayedStateSync(t *testing.T) {
 	srcDb, srcRoot, srcAccounts := makeTestState()
 
 	// Create a destination state and sync with the scheduler
-	dstDb := ethdb.NewMemDatabase()
-	sched := NewStateSync(srcRoot, dstDb)
+	dstDb := rawdb.NewMemoryDatabase()
+	sched := NewStateSync(srcRoot, dstDb, trie.NewSyncBloom(1, dstDb))
 
 	queue := append([]common.Hash{}, sched.Missing(0)...)
 	for len(queue) > 0 {
@@ -208,8 +210,8 @@ func testIterativeRandomStateSync(t *testing.T, batch int) {
 	srcDb, srcRoot, srcAccounts := makeTestState()
 
 	// Create a destination state and sync with the scheduler
-	dstDb := ethdb.NewMemDatabase()
-	sched := NewStateSync(srcRoot, dstDb)
+	dstDb := rawdb.NewMemoryDatabase()
+	sched := NewStateSync(srcRoot, dstDb, trie.NewSyncBloom(1, dstDb))
 
 	queue := make(map[common.Hash]struct{})
 	for _, hash := range sched.Missing(batch) {
@@ -248,8 +250,8 @@ func TestIterativeRandomDelayedStateSync(t *testing.T) {
 	srcDb, srcRoot, srcAccounts := makeTestState()
 
 	// Create a destination state and sync with the scheduler
-	dstDb := ethdb.NewMemDatabase()
-	sched := NewStateSync(srcRoot, dstDb)
+	dstDb := rawdb.NewMemoryDatabase()
+	sched := NewStateSync(srcRoot, dstDb, trie.NewSyncBloom(1, dstDb))
 
 	queue := make(map[common.Hash]struct{})
 	for _, hash := range sched.Missing(0) {
@@ -295,8 +297,8 @@ func TestIncompleteStateSync(t *testing.T) {
 	checkTrieConsistency(srcDb.TrieDB().DiskDB().(ethdb.Database), srcRoot)
 
 	// Create a destination state and sync with the scheduler
-	dstDb := ethdb.NewMemDatabase()
-	sched := NewStateSync(srcRoot, dstDb)
+	dstDb := rawdb.NewMemoryDatabase()
+	sched := NewStateSync(srcRoot, dstDb, trie.NewSyncBloom(1, dstDb))
 
 	added := []common.Hash{}
 	queue := append([]common.Hash{}, sched.Missing(1)...)

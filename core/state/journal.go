@@ -19,7 +19,7 @@ package state
 import (
 	"math/big"
 
-	"github.com/etherzero/go-etherzero/common"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // journalEntry is a modification entry in the state change journal that can be
@@ -103,15 +103,6 @@ type (
 		account *common.Address
 		prev    *big.Int
 	}
-	powerChange struct {
-		account *common.Address
-		prev    *big.Int
-	}
-	blockChange struct {
-		account   *common.Address
-		prevpower *big.Int
-		prevblock *big.Int
-	}
 	nonceChange struct {
 		account *common.Address
 		prev    uint64
@@ -130,9 +121,6 @@ type (
 		prev uint64
 	}
 	addLogChange struct {
-		txhash common.Hash
-	}
-	addIntxChange struct {
 		txhash common.Hash
 	}
 	addPreimageChange struct {
@@ -180,22 +168,6 @@ func (ch touchChange) revert(s *StateDB) {
 }
 
 func (ch touchChange) dirtied() *common.Address {
-	return ch.account
-}
-
-func (ch powerChange) revert(s *StateDB) {
-	s.getStateObject(*ch.account).setPower(ch.prev)
-}
-
-func (ch powerChange) dirtied() *common.Address {
-	return ch.account
-}
-
-func (ch blockChange) revert(s *StateDB) {
-	s.getStateObject(*ch.account).setPowerAndBlock(ch.prevpower, ch.prevblock)
-}
-
-func (ch blockChange) dirtied() *common.Address {
 	return ch.account
 }
 
@@ -250,20 +222,6 @@ func (ch addLogChange) revert(s *StateDB) {
 }
 
 func (ch addLogChange) dirtied() *common.Address {
-	return nil
-}
-
-func (ch addIntxChange) revert(s *StateDB) {
-	intxs := s.intxs[ch.txhash]
-	if len(intxs) == 1 {
-		delete(s.intxs, ch.txhash)
-	} else {
-		s.intxs[ch.txhash] = intxs[:len(intxs)-1]
-	}
-	s.intxSize--
-}
-
-func (ch addIntxChange) dirtied() *common.Address {
 	return nil
 }
 

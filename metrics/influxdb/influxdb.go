@@ -5,8 +5,8 @@ import (
 	uurl "net/url"
 	"time"
 
-	"github.com/etherzero/go-etherzero/log"
-	"github.com/etherzero/go-etherzero/metrics"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/influxdata/influxdb/client"
 )
 
@@ -91,6 +91,7 @@ func (r *reporter) makeClient() (err error) {
 		URL:      r.url,
 		Username: r.username,
 		Password: r.password,
+		Timeout:  10 * time.Second,
 	})
 
 	return

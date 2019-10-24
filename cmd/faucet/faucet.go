@@ -1,18 +1,18 @@
-// Copyright 2017 The go-etherzero Authors
-// This file is part of go-etherzero.
+// Copyright 2017 The go-ethereum Authors
+// This file is part of go-ethereum.
 //
-// go-etherzero is free software: you can redistribute it and/or modify
+// go-ethereum is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-etherzero is distributed in the hope that it will be useful,
+// go-ethereum is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-etherzero. If not, see <http://www.gnu.org/licenses/>.
+// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
 // faucet is a Ether faucet backed by a light client.
 package main
@@ -41,23 +41,23 @@ import (
 	"sync"
 	"time"
 
-	"github.com/etherzero/go-etherzero/accounts"
-	"github.com/etherzero/go-etherzero/accounts/keystore"
-	"github.com/etherzero/go-etherzero/common"
-	"github.com/etherzero/go-etherzero/core"
-	"github.com/etherzero/go-etherzero/core/types"
-	"github.com/etherzero/go-etherzero/eth"
-	"github.com/etherzero/go-etherzero/eth/downloader"
-	"github.com/etherzero/go-etherzero/ethclient"
-	"github.com/etherzero/go-etherzero/ethstats"
-	"github.com/etherzero/go-etherzero/les"
-	"github.com/etherzero/go-etherzero/log"
-	"github.com/etherzero/go-etherzero/node"
-	"github.com/etherzero/go-etherzero/p2p"
-	"github.com/etherzero/go-etherzero/p2p/discv5"
-	"github.com/etherzero/go-etherzero/p2p/enode"
-	"github.com/etherzero/go-etherzero/p2p/nat"
-	"github.com/etherzero/go-etherzero/params"
+	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/ethstats"
+	"github.com/ethereum/go-ethereum/les"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/discv5"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/nat"
+	"github.com/ethereum/go-ethereum/params"
 	"golang.org/x/net/websocket"
 )
 
@@ -86,6 +86,11 @@ var (
 
 var (
 	ether = new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
+)
+
+var (
+	gitCommit = "" // Git SHA1 commit hash of the release (set via linker flags)
+	gitDate   = "" // Git commit date YYYYMMDD of the release (set via linker flags)
 )
 
 func main() {
@@ -216,7 +221,7 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*discv5.Node, network u
 	// Assemble the raw devp2p protocol stack
 	stack, err := node.New(&node.Config{
 		Name:    "geth",
-		Version: params.VersionWithMeta,
+		Version: params.VersionWithCommit(gitCommit, gitDate),
 		DataDir: filepath.Join(os.Getenv("HOME"), ".faucet"),
 		P2P: p2p.Config{
 			NAT:              nat.Any(),
@@ -255,7 +260,7 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*discv5.Node, network u
 		return nil, err
 	}
 	for _, boot := range enodes {
-		old, err := enode.ParseV4(boot.String())
+		old, err := enode.Parse(enode.ValidSchemes, boot.String())
 		if err == nil {
 			stack.Server().AddPeer(old)
 		}
@@ -282,7 +287,7 @@ func newFaucet(genesis *core.Genesis, port int, enodes []*discv5.Node, network u
 
 // close terminates the Ethereum connection and tears down the faucet.
 func (f *faucet) close() error {
-	return f.stack.Stop()
+	return f.stack.Close()
 }
 
 // listenAndServe registers the HTTP handlers for the faucet and boots it up
@@ -440,16 +445,20 @@ func (f *faucet) apiHandler(conn *websocket.Conn) {
 				return
 			}
 			continue
+		case strings.HasPrefix(msg.URL, "https://plus.google.com/"):
+			if err = sendError(conn, errors.New("Google+ authentication discontinued as the service was sunset")); err != nil {
+				log.Warn("Failed to send Google+ deprecation to client", "err", err)
+				return
+			}
+			continue
 		case strings.HasPrefix(msg.URL, "https://twitter.com/"):
 			username, avatar, address, err = authTwitter(msg.URL)
-		case strings.HasPrefix(msg.URL, "https://plus.google.com/"):
-			username, avatar, address, err = authGooglePlus(msg.URL)
 		case strings.HasPrefix(msg.URL, "https://www.facebook.com/"):
 			username, avatar, address, err = authFacebook(msg.URL)
 		case *noauthFlag:
 			username, avatar, address, err = authNoAuth(msg.URL)
 		default:
-			err = errors.New("Something funky happened, please open an issue at https://github.com/etherzero/go-etherzero/issues")
+			err = errors.New("Something funky happened, please open an issue at https://github.com/ethereum/go-ethereum/issues")
 		}
 		if err != nil {
 			if err = sendError(conn, err); err != nil {
@@ -497,7 +506,10 @@ func (f *faucet) apiHandler(conn *websocket.Conn) {
 				Time:    time.Now(),
 				Tx:      signed,
 			})
-			f.timeouts[username] = time.Now().Add(time.Duration(*minutesFlag*int(math.Pow(3, float64(msg.Tier)))) * time.Minute)
+			timeout := time.Duration(*minutesFlag*int(math.Pow(3, float64(msg.Tier)))) * time.Minute
+			grace := timeout / 288 // 24h timeout => 5m grace
+
+			f.timeouts[username] = time.Now().Add(timeout - grace)
 			fund = true
 		}
 		f.lock.Unlock()
@@ -697,40 +709,6 @@ func authTwitter(url string) (string, string, common.Address, error) {
 		avatar = parts[1]
 	}
 	return username + "@twitter", avatar, address, nil
-}
-
-// authGooglePlus tries to authenticate a faucet request using GooglePlus posts,
-// returning the username, avatar URL and Ethereum address to fund on success.
-func authGooglePlus(url string) (string, string, common.Address, error) {
-	// Ensure the user specified a meaningful URL, no fancy nonsense
-	parts := strings.Split(url, "/")
-	if len(parts) < 4 || parts[len(parts)-2] != "posts" {
-		return "", "", common.Address{}, errors.New("Invalid Google+ post URL")
-	}
-	username := parts[len(parts)-3]
-
-	// Google's API isn't really friendly with direct links. Still, we don't
-	// want to do ask read permissions from users, so just load the public posts and
-	// scrape it for the Ethereum address and profile URL.
-	res, err := http.Get(url)
-	if err != nil {
-		return "", "", common.Address{}, err
-	}
-	defer res.Body.Close()
-
-	body, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		return "", "", common.Address{}, err
-	}
-	address := common.HexToAddress(string(regexp.MustCompile("0x[0-9a-fA-F]{40}").Find(body)))
-	if address == (common.Address{}) {
-		return "", "", common.Address{}, errors.New("No Ethereum address found to fund")
-	}
-	var avatar string
-	if parts = regexp.MustCompile("src=\"([^\"]+googleusercontent.com[^\"]+photo.jpg)\"").FindStringSubmatch(string(body)); len(parts) == 2 {
-		avatar = parts[1]
-	}
-	return username + "@google+", avatar, address, nil
 }
 
 // authFacebook tries to authenticate a faucet request using Facebook posts,

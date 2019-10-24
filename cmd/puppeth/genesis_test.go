@@ -1,34 +1,33 @@
-// Copyright 2018 The go-etherzero Authors
-// This file is part of go-etherzero.
+// Copyright 2018 The go-ethereum Authors
+// This file is part of go-ethereum.
 //
-// go-etherzero is free software: you can redistribute it and/or modify
+// go-ethereum is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-etherzero is distributed in the hope that it will be useful,
+// go-ethereum is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-etherzero. If not, see <http://www.gnu.org/licenses/>.
+// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
 package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/etherzero/go-etherzero/core"
+	"github.com/ethereum/go-ethereum/core"
 )
 
-// Tests the go-etherzero to Aleth chainspec conversion for the Stureby testnet.
+// Tests the go-ethereum to Aleth chainspec conversion for the Stureby testnet.
 func TestAlethSturebyConverter(t *testing.T) {
 	blob, err := ioutil.ReadFile("testdata/stureby_geth.json")
 	if err != nil {
@@ -61,13 +60,13 @@ func TestAlethSturebyConverter(t *testing.T) {
 		got := strings.Split(c.Sdump(spec), "\n")
 		for i := 0; i < len(exp) && i < len(got); i++ {
 			if exp[i] != got[i] {
-				fmt.Printf("got: %v\nexp: %v\n", exp[i], got[i])
+				t.Logf("got: %v\nexp: %v\n", exp[i], got[i])
 			}
 		}
 	}
 }
 
-// Tests the go-etherzero to Parity chainspec conversion for the Stureby testnet.
+// Tests the go-ethereum to Parity chainspec conversion for the Stureby testnet.
 func TestParitySturebyConverter(t *testing.T) {
 	blob, err := ioutil.ReadFile("testdata/stureby_geth.json")
 	if err != nil {
@@ -102,7 +101,7 @@ func TestParitySturebyConverter(t *testing.T) {
 		got := strings.Split(c.Sdump(spec), "\n")
 		for i := 0; i < len(exp) && i < len(got); i++ {
 			if exp[i] != got[i] {
-				fmt.Printf("got: %v\nexp: %v\n", exp[i], got[i])
+				t.Logf("got: %v\nexp: %v\n", exp[i], got[i])
 			}
 		}
 	}

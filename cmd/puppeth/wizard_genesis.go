@@ -1,18 +1,18 @@
-// Copyright 2017 The go-etherzero Authors
-// This file is part of go-etherzero.
+// Copyright 2017 The go-ethereum Authors
+// This file is part of go-ethereum.
 //
-// go-etherzero is free software: you can redistribute it and/or modify
+// go-ethereum is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-etherzero is distributed in the hope that it will be useful,
+// go-ethereum is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-etherzero. If not, see <http://www.gnu.org/licenses/>.
+// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
 package main
 
@@ -29,10 +29,10 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/etherzero/go-etherzero/common"
-	"github.com/etherzero/go-etherzero/core"
-	"github.com/etherzero/go-etherzero/log"
-	"github.com/etherzero/go-etherzero/params"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // makeGenesis creates a new genesis struct based on some user input.
@@ -44,12 +44,13 @@ func (w *wizard) makeGenesis() {
 		Difficulty: big.NewInt(524288),
 		Alloc:      make(core.GenesisAlloc),
 		Config: &params.ChainConfig{
-			HomesteadBlock:      big.NewInt(1),
-			EIP150Block:         big.NewInt(2),
-			EIP155Block:         big.NewInt(3),
-			EIP158Block:         big.NewInt(3),
-			ByzantiumBlock:      big.NewInt(4),
-			ConstantinopleBlock: big.NewInt(5),
+			HomesteadBlock:      big.NewInt(0),
+			EIP150Block:         big.NewInt(0),
+			EIP155Block:         big.NewInt(0),
+			EIP158Block:         big.NewInt(0),
+			ByzantiumBlock:      big.NewInt(0),
+			ConstantinopleBlock: big.NewInt(0),
+			PetersburgBlock:     big.NewInt(0),
 		},
 	}
 	// Figure out which consensus engine to choose
@@ -191,7 +192,7 @@ func (w *wizard) importGenesis() {
 func (w *wizard) manageGenesis() {
 	// Figure out whether to modify or export the genesis
 	fmt.Println()
-	fmt.Println(" 1. Modify existing fork rules")
+	fmt.Println(" 1. Modify existing configurations")
 	fmt.Println(" 2. Export genesis configurations")
 	fmt.Println(" 3. Remove genesis configuration")
 
@@ -226,7 +227,7 @@ func (w *wizard) manageGenesis() {
 			w.conf.Genesis.Config.PetersburgBlock = w.conf.Genesis.Config.ConstantinopleBlock
 		}
 		fmt.Println()
-		fmt.Printf("Which block should Constantinople-Fix (remove EIP-1283) come into effect? (default = %v)\n", w.conf.Genesis.Config.PetersburgBlock)
+		fmt.Printf("Which block should Petersburg come into effect? (default = %v)\n", w.conf.Genesis.Config.PetersburgBlock)
 		w.conf.Genesis.Config.PetersburgBlock = w.readDefaultBigInt(w.conf.Genesis.Config.PetersburgBlock)
 
 		out, _ := json.MarshalIndent(w.conf.Genesis.Config, "", "  ")

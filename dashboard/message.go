@@ -1,24 +1,23 @@
-// Copyright 2017 The go-etherzero Authors
-// This file is part of the go-etherzero library.
+// Copyright 2017 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-etherzero library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-etherzero library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-etherzero library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package dashboard
 
 import (
 	"encoding/json"
-	"time"
 )
 
 type Message struct {
@@ -34,8 +33,7 @@ type Message struct {
 type ChartEntries []*ChartEntry
 
 type ChartEntry struct {
-	Time  time.Time `json:"time,omitempty"`
-	Value float64   `json:"value,omitempty"`
+	Value float64 `json:"value"`
 }
 
 type GeneralMessage struct {
@@ -55,10 +53,14 @@ type TxPoolMessage struct {
 	/* TODO (kurkomisi) */
 }
 
+// NetworkMessage contains information about the peers
+// organized based on their IP address and node ID.
 type NetworkMessage struct {
-	/* TODO (kurkomisi) */
+	Peers *peerContainer `json:"peers,omitempty"` // Peer tree.
+	Diff  []*peerEvent   `json:"diff,omitempty"`  // Events that change the peer tree.
 }
 
+// SystemMessage contains the metered system data samples.
 type SystemMessage struct {
 	ActiveMemory   ChartEntries `json:"activeMemory,omitempty"`
 	VirtualMemory  ChartEntries `json:"virtualMemory,omitempty"`
@@ -70,7 +72,7 @@ type SystemMessage struct {
 	DiskWrite      ChartEntries `json:"diskWrite,omitempty"`
 }
 
-// LogsMessage wraps up a log chunk. If Source isn't present, the chunk is a stream chunk.
+// LogsMessage wraps up a log chunk. If 'Source' isn't present, the chunk is a stream chunk.
 type LogsMessage struct {
 	Source *LogFile        `json:"source,omitempty"` // Attributes of the log file.
 	Chunk  json.RawMessage `json:"chunk"`            // Contains log records.
@@ -87,6 +89,7 @@ type Request struct {
 	Logs *LogsRequest `json:"logs,omitempty"`
 }
 
+// LogsRequest contains the attributes of the log file the client wants to receive.
 type LogsRequest struct {
 	Name string `json:"name"` // The request handler searches for log file based on this file name.
 	Past bool   `json:"past"` // Denotes whether the client wants the previous or the next file.

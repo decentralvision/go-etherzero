@@ -1,18 +1,18 @@
-// Copyright 2017 The go-etherzero Authors
-// This file is part of the go-etherzero library.
+// Copyright 2017 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-etherzero library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-etherzero library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-etherzero library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package light
 
@@ -24,25 +24,22 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/etherzero/go-etherzero/common"
-	"github.com/etherzero/go-etherzero/common/bitutil"
-	"github.com/etherzero/go-etherzero/core"
-	"github.com/etherzero/go-etherzero/core/rawdb"
-	"github.com/etherzero/go-etherzero/core/types"
-	"github.com/etherzero/go-etherzero/ethdb"
-	"github.com/etherzero/go-etherzero/log"
-	"github.com/etherzero/go-etherzero/params"
-	"github.com/etherzero/go-etherzero/rlp"
-	"github.com/etherzero/go-etherzero/trie"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/bitutil"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 // IndexerConfig includes a set of configs for chain indexers.
 type IndexerConfig struct {
 	// The block frequency for creating CHTs.
 	ChtSize uint64
-
-	// A special auxiliary field represents client's chtsize for server config, otherwise represents server's chtsize.
-	PairChtSize uint64
 
 	// The number of confirmations needed to generate/accept a canonical hash help trie.
 	ChtConfirms uint64
@@ -64,8 +61,7 @@ type IndexerConfig struct {
 var (
 	// DefaultServerIndexerConfig wraps a set of configs as a default indexer config for server side.
 	DefaultServerIndexerConfig = &IndexerConfig{
-		ChtSize:           params.CHTFrequencyServer,
-		PairChtSize:       params.CHTFrequencyClient,
+		ChtSize:           params.CHTFrequency,
 		ChtConfirms:       params.HelperTrieProcessConfirmations,
 		BloomSize:         params.BloomBitsBlocks,
 		BloomConfirms:     params.BloomConfirms,
@@ -74,8 +70,7 @@ var (
 	}
 	// DefaultClientIndexerConfig wraps a set of configs as a default indexer config for client side.
 	DefaultClientIndexerConfig = &IndexerConfig{
-		ChtSize:           params.CHTFrequencyClient,
-		PairChtSize:       params.CHTFrequencyServer,
+		ChtSize:           params.CHTFrequency,
 		ChtConfirms:       params.HelperTrieConfirmations,
 		BloomSize:         params.BloomBitsBlocksClient,
 		BloomConfirms:     params.HelperTrieConfirmations,
@@ -84,8 +79,7 @@ var (
 	}
 	// TestServerIndexerConfig wraps a set of configs as a test indexer config for server side.
 	TestServerIndexerConfig = &IndexerConfig{
-		ChtSize:           64,
-		PairChtSize:       512,
+		ChtSize:           512,
 		ChtConfirms:       4,
 		BloomSize:         64,
 		BloomConfirms:     4,
@@ -95,7 +89,6 @@ var (
 	// TestClientIndexerConfig wraps a set of configs as a test indexer config for client side.
 	TestClientIndexerConfig = &IndexerConfig{
 		ChtSize:           512,
-		PairChtSize:       64,
 		ChtConfirms:       32,
 		BloomSize:         512,
 		BloomConfirms:     32,
@@ -105,10 +98,10 @@ var (
 )
 
 var (
-	ErrNoTrustedCht       = errors.New("no trusted canonical hash trie")
-	ErrNoTrustedBloomTrie = errors.New("no trusted bloom trie")
-	ErrNoHeader           = errors.New("header not found")
-	chtPrefix             = []byte("chtRoot-") // chtPrefix + chtNum (uint64 big endian) -> trie root hash
+	errNoTrustedCht       = errors.New("no trusted canonical hash trie")
+	errNoTrustedBloomTrie = errors.New("no trusted bloom trie")
+	errNoHeader           = errors.New("header not found")
+	chtPrefix             = []byte("chtRootV2-") // chtPrefix + chtNum (uint64 big endian) -> trie root hash
 	ChtTablePrefix        = "cht-"
 )
 
@@ -119,7 +112,6 @@ type ChtNode struct {
 }
 
 // GetChtRoot reads the CHT root associated to the given section from the database
-// Note that sectionIdx is specified according to LES/1 CHT section size.
 func GetChtRoot(db ethdb.Database, sectionIdx uint64, sectionHead common.Hash) common.Hash {
 	var encNumber [8]byte
 	binary.BigEndian.PutUint64(encNumber[:], sectionIdx)
@@ -128,7 +120,6 @@ func GetChtRoot(db ethdb.Database, sectionIdx uint64, sectionHead common.Hash) c
 }
 
 // StoreChtRoot writes the CHT root associated to the given section into the database
-// Note that sectionIdx is specified according to LES/1 CHT section size.
 func StoreChtRoot(db ethdb.Database, sectionIdx uint64, sectionHead, root common.Hash) {
 	var encNumber [8]byte
 	binary.BigEndian.PutUint64(encNumber[:], sectionIdx)
@@ -147,7 +138,7 @@ type ChtIndexerBackend struct {
 
 // NewChtIndexer creates a Cht chain indexer
 func NewChtIndexer(db ethdb.Database, odr OdrBackend, size, confirms uint64) *core.ChainIndexer {
-	trieTable := ethdb.NewTable(db, ChtTablePrefix)
+	trieTable := rawdb.NewTable(db, ChtTablePrefix)
 	backend := &ChtIndexerBackend{
 		diskdb:      db,
 		odr:         odr,
@@ -155,7 +146,7 @@ func NewChtIndexer(db ethdb.Database, odr OdrBackend, size, confirms uint64) *co
 		triedb:      trie.NewDatabaseWithCache(trieTable, 1), // Use a tiny cache only to keep memory down
 		sectionSize: size,
 	}
-	return core.NewChainIndexer(db, ethdb.NewTable(db, "chtIndex-"), backend, size, confirms, time.Millisecond*100, "cht")
+	return core.NewChainIndexer(db, rawdb.NewTable(db, "chtIndexV2-"), backend, size, confirms, time.Millisecond*100, "cht")
 }
 
 // fetchMissingNodes tries to retrieve the last entry of the latest trusted CHT from the
@@ -227,9 +218,7 @@ func (c *ChtIndexerBackend) Commit() error {
 	}
 	c.triedb.Commit(root, false)
 
-	if ((c.section+1)*c.sectionSize)%params.CHTFrequencyClient == 0 {
-		log.Info("Storing CHT", "section", c.section*c.sectionSize/params.CHTFrequencyClient, "head", fmt.Sprintf("%064x", c.lastHash), "root", fmt.Sprintf("%064x", root))
-	}
+	log.Info("Storing CHT", "section", c.section, "head", fmt.Sprintf("%064x", c.lastHash), "root", fmt.Sprintf("%064x", root))
 	StoreChtRoot(c.diskdb, c.section, c.lastHash, root)
 	return nil
 }
@@ -269,7 +258,7 @@ type BloomTrieIndexerBackend struct {
 
 // NewBloomTrieIndexer creates a BloomTrie chain indexer
 func NewBloomTrieIndexer(db ethdb.Database, odr OdrBackend, parentSize, size uint64) *core.ChainIndexer {
-	trieTable := ethdb.NewTable(db, BloomTrieTablePrefix)
+	trieTable := rawdb.NewTable(db, BloomTrieTablePrefix)
 	backend := &BloomTrieIndexerBackend{
 		diskdb:     db,
 		odr:        odr,
@@ -280,7 +269,7 @@ func NewBloomTrieIndexer(db ethdb.Database, odr OdrBackend, parentSize, size uin
 	}
 	backend.bloomTrieRatio = size / parentSize
 	backend.sectionHeads = make([]common.Hash, backend.bloomTrieRatio)
-	return core.NewChainIndexer(db, ethdb.NewTable(db, "bltIndex-"), backend, size, 0, time.Millisecond*100, "bloomtrie")
+	return core.NewChainIndexer(db, rawdb.NewTable(db, "bltIndex-"), backend, size, 0, time.Millisecond*100, "bloomtrie")
 }
 
 // fetchMissingNodes tries to retrieve the last entries of the latest trusted bloom trie from the

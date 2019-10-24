@@ -1,18 +1,18 @@
-// Copyright 2017 The go-etherzero Authors
-// This file is part of go-etherzero.
+// Copyright 2017 The go-ethereum Authors
+// This file is part of go-ethereum.
 //
-// go-etherzero is free software: you can redistribute it and/or modify
+// go-ethereum is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-etherzero is distributed in the hope that it will be useful,
+// go-ethereum is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-etherzero. If not, see <http://www.gnu.org/licenses/>.
+// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
 package main
 
@@ -27,12 +27,12 @@ import (
 
 	cli "gopkg.in/urfave/cli.v1"
 
-	"github.com/etherzero/go-etherzero/cmd/utils"
-	"github.com/etherzero/go-etherzero/dashboard"
-	"github.com/etherzero/go-etherzero/eth"
-	"github.com/etherzero/go-etherzero/node"
-	"github.com/etherzero/go-etherzero/params"
-	whisper "github.com/etherzero/go-etherzero/whisper/whisperv6"
+	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/dashboard"
+	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/params"
+	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 	"github.com/naoina/toml"
 )
 
@@ -100,7 +100,7 @@ func loadConfig(file string, cfg *gethConfig) error {
 func defaultNodeConfig() node.Config {
 	cfg := node.DefaultConfig
 	cfg.Name = clientIdentifier
-	cfg.Version = params.VersionWithCommit(gitCommit)
+	cfg.Version = params.VersionWithCommit(gitCommit, gitDate)
 	cfg.HTTPModules = append(cfg.HTTPModules, "eth", "shh")
 	cfg.WSModules = append(cfg.WSModules, "eth", "shh")
 	cfg.IPCPath = "geth.ipc"
@@ -133,7 +133,6 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 	if ctx.GlobalIsSet(utils.EthStatsURLFlag.Name) {
 		cfg.Ethstats.URL = ctx.GlobalString(utils.EthStatsURLFlag.Name)
 	}
-
 	utils.SetShhConfig(ctx, stack, &cfg.Shh)
 	utils.SetDashboardConfig(ctx, &cfg.Dashboard)
 
@@ -152,8 +151,8 @@ func enableWhisper(ctx *cli.Context) bool {
 
 func makeFullNode(ctx *cli.Context) *node.Node {
 	stack, cfg := makeConfigNode(ctx)
-	if ctx.GlobalIsSet(utils.ConstantinopleOverrideFlag.Name) {
-		cfg.Eth.ConstantinopleOverride = new(big.Int).SetUint64(ctx.GlobalUint64(utils.ConstantinopleOverrideFlag.Name))
+	if ctx.GlobalIsSet(utils.OverrideIstanbulFlag.Name) {
+		cfg.Eth.OverrideIstanbul = new(big.Int).SetUint64(ctx.GlobalUint64(utils.OverrideIstanbulFlag.Name))
 	}
 	utils.RegisterEthService(stack, &cfg.Eth)
 
@@ -175,7 +174,10 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 		}
 		utils.RegisterShhService(stack, &cfg.Shh)
 	}
-
+	// Configure GraphQL if requested
+	if ctx.GlobalIsSet(utils.GraphQLEnabledFlag.Name) {
+		utils.RegisterGraphQLService(stack, cfg.Node.GraphQLEndpoint(), cfg.Node.GraphQLCors, cfg.Node.GraphQLVirtualHosts, cfg.Node.HTTPTimeouts)
+	}
 	// Add the Ethereum Stats daemon if requested.
 	if cfg.Ethstats.URL != "" {
 		utils.RegisterEthStatsService(stack, cfg.Ethstats.URL)

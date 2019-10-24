@@ -1,18 +1,18 @@
-// Copyright 2017 The go-etherzero Authors
-// This file is part of the go-etherzero library.
+// Copyright 2017 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-etherzero library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-etherzero library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-etherzero library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // Package ethash implements the ethash proof-of-work consensus engine.
 package ethash
@@ -34,12 +34,12 @@ import (
 	"unsafe"
 
 	mmap "github.com/edsrzf/mmap-go"
-	"github.com/etherzero/go-etherzero/common"
-	"github.com/etherzero/go-etherzero/consensus"
-	"github.com/etherzero/go-etherzero/core/types"
-	"github.com/etherzero/go-etherzero/log"
-	"github.com/etherzero/go-etherzero/metrics"
-	"github.com/etherzero/go-etherzero/rpc"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/hashicorp/golang-lru/simplelru"
 )
 

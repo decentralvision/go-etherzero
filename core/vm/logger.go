@@ -1,18 +1,18 @@
-// Copyright 2015 The go-etherzero Authors
-// This file is part of the go-etherzero library.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-etherzero library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-etherzero library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-etherzero library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package vm
 
@@ -23,10 +23,10 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/etherzero/go-etherzero/common"
-	"github.com/etherzero/go-etherzero/common/hexutil"
-	"github.com/etherzero/go-etherzero/common/math"
-	"github.com/etherzero/go-etherzero/core/types"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // Storage represents a contract's storage.
@@ -158,7 +158,7 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost ui
 		)
 		l.changedValues[contract.Address()][address] = value
 	}
-	// Copy a snapstot of the current memory state to a new buffer
+	// Copy a snapshot of the current memory state to a new buffer
 	var mem []byte
 	if !l.cfg.DisableMemory {
 		mem = make([]byte, len(memory.Data()))
@@ -177,7 +177,7 @@ func (l *StructLogger) CaptureState(env *EVM, pc uint64, op OpCode, gas, cost ui
 	if !l.cfg.DisableStorage {
 		storage = l.changedValues[contract.Address()].Copy()
 	}
-	// create a new snaptshot of the EVM.
+	// create a new snapshot of the EVM.
 	log := StructLog{pc, op, gas, cost, mem, memory.Len(), stck, storage, depth, env.StateDB.GetRefund(), err}
 
 	l.logs = append(l.logs, log)

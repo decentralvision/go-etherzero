@@ -1,18 +1,18 @@
-// Copyright 2015 The go-etherzero Authors
-// This file is part of the go-etherzero library.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-etherzero library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-etherzero library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-etherzero library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package abi
 
@@ -68,7 +68,6 @@ func NewType(t string, components []ArgumentMarshaling) (typ Type, err error) {
 	if strings.Count(t, "[") != strings.Count(t, "]") {
 		return Type{}, fmt.Errorf("invalid arg type in abi")
 	}
-
 	typ.stringKind = t
 
 	// if there are brackets, get ready to go into slice/array mode and
@@ -92,9 +91,7 @@ func NewType(t string, components []ArgumentMarshaling) (typ Type, err error) {
 			typ.Kind = reflect.Slice
 			typ.Elem = &embeddedType
 			typ.Type = reflect.SliceOf(embeddedType.Type)
-			if embeddedType.T == TupleTy {
-				typ.stringKind = embeddedType.stringKind + sliced
-			}
+			typ.stringKind = embeddedType.stringKind + sliced
 		} else if len(intz) == 1 {
 			// is a array
 			typ.T = ArrayTy
@@ -105,9 +102,7 @@ func NewType(t string, components []ArgumentMarshaling) (typ Type, err error) {
 				return Type{}, fmt.Errorf("abi: error parsing variable size: %v", err)
 			}
 			typ.Type = reflect.ArrayOf(typ.Size, embeddedType.Type)
-			if embeddedType.T == TupleTy {
-				typ.stringKind = embeddedType.stringKind + sliced
-			}
+			typ.stringKind = embeddedType.stringKind + sliced
 		} else {
 			return Type{}, fmt.Errorf("invalid formatting of array type")
 		}
@@ -188,6 +183,7 @@ func NewType(t string, components []ArgumentMarshaling) (typ Type, err error) {
 			fields = append(fields, reflect.StructField{
 				Name: ToCamelCase(c.Name), // reflect.StructOf will panic for any exported field.
 				Type: cType.Type,
+				Tag:  reflect.StructTag("json:\"" + c.Name + "\""),
 			})
 			elems = append(elems, &cType)
 			names = append(names, c.Name)

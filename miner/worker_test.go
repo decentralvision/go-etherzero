@@ -1,37 +1,49 @@
-// Copyright 2018 The go-etherzero Authors
-// This file is part of the go-etherzero library.
+// Copyright 2018 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-etherzero library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-etherzero library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-etherzero library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package miner
 
 import (
 	"math/big"
+	"math/rand"
 	"testing"
 	"time"
 
-	"github.com/etherzero/go-etherzero/common"
-	"github.com/etherzero/go-etherzero/consensus"
-	"github.com/etherzero/go-etherzero/consensus/clique"
-	"github.com/etherzero/go-etherzero/consensus/ethash"
-	"github.com/etherzero/go-etherzero/core"
-	"github.com/etherzero/go-etherzero/core/types"
-	"github.com/etherzero/go-etherzero/core/vm"
-	"github.com/etherzero/go-etherzero/crypto"
-	"github.com/etherzero/go-etherzero/ethdb"
-	"github.com/etherzero/go-etherzero/event"
-	"github.com/etherzero/go-etherzero/params"
+	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/clique"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/params"
+)
+
+const (
+	// testCode is the testing contract binary code which will initialises some
+	// variables in constructor
+	testCode = "0x60806040527fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0060005534801561003457600080fd5b5060fc806100436000396000f3fe6080604052348015600f57600080fd5b506004361060325760003560e01c80630c4dae8814603757806398a213cf146053575b600080fd5b603d607e565b6040518082815260200191505060405180910390f35b607c60048036036020811015606757600080fd5b81019080803590602001909291905050506084565b005b60005481565b806000819055507fe9e44f9f7da8c559de847a3232b57364adc0354f15a2cd8dc636d54396f9587a6000546040518082815260200191505060405180910390a15056fea265627a7a723058208ae31d9424f2d0bc2a3da1a5dd659db2d71ec322a17db8f87e19e209e3a1ff4a64736f6c634300050a0032"
+
+	// testGas is the gas required for contract deployment.
+	testGas = 144109
 )
 
 var (
@@ -51,6 +63,12 @@ var (
 	// Test transactions
 	pendingTxs []*types.Transaction
 	newTxs     []*types.Transaction
+
+	testConfig = &Config{
+		Recommit: time.Second,
+		GasFloor: params.GenesisGasLimit,
+		GasCeil:  params.GenesisGasLimit,
+	}
 )
 
 func init() {
@@ -74,29 +92,30 @@ type testWorkerBackend struct {
 	txPool     *core.TxPool
 	chain      *core.BlockChain
 	testTxFeed event.Feed
+	genesis    *core.Genesis
 	uncleBlock *types.Block
 }
 
-func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, n int) *testWorkerBackend {
-	var (
-		db    = ethdb.NewMemDatabase()
-		gspec = core.Genesis{
-			Config: chainConfig,
-			Alloc:  core.GenesisAlloc{testBankAddress: {Balance: testBankFunds}},
-		}
-	)
+func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, n int) *testWorkerBackend {
+	var gspec = core.Genesis{
+		Config: chainConfig,
+		Alloc:  core.GenesisAlloc{testBankAddress: {Balance: testBankFunds}},
+	}
 
-	switch engine.(type) {
+	switch e := engine.(type) {
 	case *clique.Clique:
-		gspec.ExtraData = make([]byte, 32+common.AddressLength+65)
-		copy(gspec.ExtraData[32:], testBankAddress[:])
+		gspec.ExtraData = make([]byte, 32+common.AddressLength+crypto.SignatureLength)
+		copy(gspec.ExtraData[32:32+common.AddressLength], testBankAddress.Bytes())
+		e.Authorize(testBankAddress, func(account accounts.Account, s string, data []byte) ([]byte, error) {
+			return crypto.Sign(crypto.Keccak256(data), testBankKey)
+		})
 	case *ethash.Ethash:
 	default:
 		t.Fatalf("unexpected consensus engine type: %T", engine)
 	}
 	genesis := gspec.MustCommit(db)
 
-	chain, _ := core.NewBlockChain(db, nil, gspec.Config, engine, vm.Config{}, nil)
+	chain, _ := core.NewBlockChain(db, &core.CacheConfig{TrieDirtyDisabled: true}, gspec.Config, engine, vm.Config{}, nil)
 	txpool := core.NewTxPool(testTxPoolConfig, chainConfig, chain)
 
 	// Generate a small n-block chain and an uncle block for it
@@ -120,6 +139,7 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 		db:         db,
 		chain:      chain,
 		txPool:     txpool,
+		genesis:    &gspec,
 		uncleBlock: blocks[0],
 	}
 }
@@ -130,25 +150,134 @@ func (b *testWorkerBackend) PostChainEvents(events []interface{}) {
 	b.chain.PostChainEvents(events, nil)
 }
 
-func newTestWorker(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, blocks int) (*worker, *testWorkerBackend) {
-	backend := newTestWorkerBackend(t, chainConfig, engine, blocks)
+func (b *testWorkerBackend) newRandomUncle() *types.Block {
+	var parent *types.Block
+	cur := b.chain.CurrentBlock()
+	if cur.NumberU64() == 0 {
+		parent = b.chain.Genesis()
+	} else {
+		parent = b.chain.GetBlockByHash(b.chain.CurrentBlock().ParentHash())
+	}
+	blocks, _ := core.GenerateChain(b.chain.Config(), parent, b.chain.Engine(), b.db, 1, func(i int, gen *core.BlockGen) {
+		var addr common.Address
+		rand.Read(addr.Bytes())
+		gen.SetCoinbase(addr)
+	})
+	return blocks[0]
+}
+
+func (b *testWorkerBackend) newRandomTx(creation bool) *types.Transaction {
+	var tx *types.Transaction
+	if creation {
+		tx, _ = types.SignTx(types.NewContractCreation(b.txPool.Nonce(testBankAddress), big.NewInt(0), testGas, nil, common.FromHex(testCode)), types.HomesteadSigner{}, testBankKey)
+	} else {
+		tx, _ = types.SignTx(types.NewTransaction(b.txPool.Nonce(testBankAddress), testUserAddress, big.NewInt(1000), params.TxGas, nil, nil), types.HomesteadSigner{}, testBankKey)
+	}
+	return tx
+}
+
+func newTestWorker(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, blocks int) (*worker, *testWorkerBackend) {
+	backend := newTestWorkerBackend(t, chainConfig, engine, db, blocks)
 	backend.txPool.AddLocals(pendingTxs)
-	w := newWorker(chainConfig, engine, backend, new(event.TypeMux), time.Second, params.GenesisGasLimit, params.GenesisGasLimit, nil)
+	w := newWorker(testConfig, chainConfig, engine, backend, new(event.TypeMux), nil)
 	w.setEtherbase(testBankAddress)
 	return w, backend
+}
+
+func TestGenerateBlockAndImportEthash(t *testing.T) {
+	testGenerateBlockAndImport(t, false)
+}
+
+func TestGenerateBlockAndImportClique(t *testing.T) {
+	testGenerateBlockAndImport(t, true)
+}
+
+func testGenerateBlockAndImport(t *testing.T, isClique bool) {
+	var (
+		engine      consensus.Engine
+		chainConfig *params.ChainConfig
+		db          = rawdb.NewMemoryDatabase()
+	)
+	if isClique {
+		chainConfig = params.AllCliqueProtocolChanges
+		engine = clique.New(chainConfig.Clique, db)
+	} else {
+		chainConfig = params.AllEthashProtocolChanges
+		engine = ethash.NewFaker()
+	}
+
+	w, b := newTestWorker(t, chainConfig, engine, db, 0)
+	defer w.close()
+
+	db2 := rawdb.NewMemoryDatabase()
+	b.genesis.MustCommit(db2)
+	chain, _ := core.NewBlockChain(db2, nil, b.chain.Config(), engine, vm.Config{}, nil)
+	defer chain.Stop()
+
+	newBlock := make(chan struct{})
+	listenNewBlock := func() {
+		sub := w.mux.Subscribe(core.NewMinedBlockEvent{})
+		defer sub.Unsubscribe()
+
+		for item := range sub.Chan() {
+			block := item.Data.(core.NewMinedBlockEvent).Block
+			_, err := chain.InsertChain([]*types.Block{block})
+			if err != nil {
+				t.Fatalf("Failed to insert new mined block:%d, error:%v", block.NumberU64(), err)
+			}
+			newBlock <- struct{}{}
+		}
+	}
+
+	// Ensure worker has finished initialization
+	for {
+		b := w.pendingBlock()
+		if b != nil && b.NumberU64() == 1 {
+			break
+		}
+	}
+	w.start() // Start mining!
+
+	// Ignore first 2 commits caused by start operation
+	ignored := make(chan struct{}, 2)
+	w.skipSealHook = func(task *task) bool {
+		ignored <- struct{}{}
+		return true
+	}
+	for i := 0; i < 2; i++ {
+		<-ignored
+	}
+
+	go listenNewBlock()
+
+	// Ignore empty commit here for less noise
+	w.skipSealHook = func(task *task) bool {
+		return len(task.receipts) == 0
+	}
+	for i := 0; i < 50; i++ {
+		b.txPool.AddLocal(b.newRandomTx(true))
+		b.txPool.AddLocal(b.newRandomTx(false))
+		b.PostChainEvents([]interface{}{core.ChainSideEvent{Block: b.newRandomUncle()}})
+		b.PostChainEvents([]interface{}{core.ChainSideEvent{Block: b.newRandomUncle()}})
+		select {
+		case <-newBlock:
+		case <-time.NewTimer(time.Millisecond * 1500).C: // Worker needs 1s to include new changes.
+			t.Fatalf("timeout")
+		}
+	}
 }
 
 func TestPendingStateAndBlockEthash(t *testing.T) {
 	testPendingStateAndBlock(t, ethashChainConfig, ethash.NewFaker())
 }
 func TestPendingStateAndBlockClique(t *testing.T) {
-	testPendingStateAndBlock(t, cliqueChainConfig, clique.New(cliqueChainConfig.Clique, ethdb.NewMemDatabase()))
+	testPendingStateAndBlock(t, cliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()))
 }
 
 func testPendingStateAndBlock(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
 	defer engine.Close()
 
-	w, b := newTestWorker(t, chainConfig, engine, 0)
+	w, b := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0)
 	defer w.close()
 
 	// Ensure snapshot has been updated.
@@ -174,13 +303,13 @@ func TestEmptyWorkEthash(t *testing.T) {
 	testEmptyWork(t, ethashChainConfig, ethash.NewFaker())
 }
 func TestEmptyWorkClique(t *testing.T) {
-	testEmptyWork(t, cliqueChainConfig, clique.New(cliqueChainConfig.Clique, ethdb.NewMemDatabase()))
+	testEmptyWork(t, cliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()))
 }
 
 func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
 	defer engine.Close()
 
-	w, _ := newTestWorker(t, chainConfig, engine, 0)
+	w, _ := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0)
 	defer w.close()
 
 	var (
@@ -224,7 +353,7 @@ func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consens
 	for i := 0; i < 2; i += 1 {
 		select {
 		case <-taskCh:
-		case <-time.NewTimer(time.Second).C:
+		case <-time.NewTimer(2 * time.Second).C:
 			t.Error("new task timeout")
 		}
 	}
@@ -234,7 +363,7 @@ func TestStreamUncleBlock(t *testing.T) {
 	ethash := ethash.NewFaker()
 	defer ethash.Close()
 
-	w, b := newTestWorker(t, ethashChainConfig, ethash, 1)
+	w, b := newTestWorker(t, ethashChainConfig, ethash, rawdb.NewMemoryDatabase(), 1)
 	defer w.close()
 
 	var taskCh = make(chan struct{})
@@ -291,13 +420,13 @@ func TestRegenerateMiningBlockEthash(t *testing.T) {
 }
 
 func TestRegenerateMiningBlockClique(t *testing.T) {
-	testRegenerateMiningBlock(t, cliqueChainConfig, clique.New(cliqueChainConfig.Clique, ethdb.NewMemDatabase()))
+	testRegenerateMiningBlock(t, cliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()))
 }
 
 func testRegenerateMiningBlock(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
 	defer engine.Close()
 
-	w, b := newTestWorker(t, chainConfig, engine, 0)
+	w, b := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0)
 	defer w.close()
 
 	var taskCh = make(chan struct{})
@@ -356,13 +485,13 @@ func TestAdjustIntervalEthash(t *testing.T) {
 }
 
 func TestAdjustIntervalClique(t *testing.T) {
-	testAdjustInterval(t, cliqueChainConfig, clique.New(cliqueChainConfig.Clique, ethdb.NewMemDatabase()))
+	testAdjustInterval(t, cliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()))
 }
 
 func testAdjustInterval(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
 	defer engine.Close()
 
-	w, _ := newTestWorker(t, chainConfig, engine, 0)
+	w, _ := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), 0)
 	defer w.close()
 
 	w.skipSealHook = func(task *task) bool {

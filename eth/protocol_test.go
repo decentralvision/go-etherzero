@@ -1,18 +1,18 @@
-// Copyright 2014 The go-etherzero Authors
-// This file is part of the go-etherzero library.
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-etherzero library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-etherzero library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-etherzero library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package eth
 
@@ -22,12 +22,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/etherzero/go-etherzero/common"
-	"github.com/etherzero/go-etherzero/core/types"
-	"github.com/etherzero/go-etherzero/crypto"
-	"github.com/etherzero/go-etherzero/eth/downloader"
-	"github.com/etherzero/go-etherzero/p2p"
-	"github.com/etherzero/go-etherzero/rlp"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 func init() {
@@ -64,7 +64,7 @@ func testStatusMsgErrors(t *testing.T, protocol int) {
 		},
 		{
 			code: StatusMsg, data: statusData{uint32(protocol), 999, td, head.Hash(), genesis.Hash()},
-			wantError: errResp(ErrNetworkIdMismatch, "999 (!= 1)"),
+			wantError: errResp(ErrNetworkIdMismatch, "999 (!= %d)", DefaultConfig.NetworkId),
 		},
 		{
 			code: StatusMsg, data: statusData{uint32(protocol), DefaultConfig.NetworkId, td, head.Hash(), common.Hash{3}},

@@ -1,18 +1,18 @@
-// Copyright 2015 The go-etherzero Authors
-// This file is part of the go-etherzero library.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-etherzero library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-etherzero library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-etherzero library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package eth
 
@@ -24,10 +24,10 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set"
-	"github.com/etherzero/go-etherzero/common"
-	"github.com/etherzero/go-etherzero/core/types"
-	"github.com/etherzero/go-etherzero/p2p"
-	"github.com/etherzero/go-etherzero/rlp"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 var (
@@ -196,8 +196,12 @@ func (p *peer) MarkTransaction(hash common.Hash) {
 // SendTransactions sends transactions to the peer and includes the hashes
 // in its transaction hash set for future reference.
 func (p *peer) SendTransactions(txs types.Transactions) error {
+	// Mark all the transactions as known, but ensure we don't overflow our limits
 	for _, tx := range txs {
 		p.knownTxs.Add(tx.Hash())
+	}
+	for p.knownTxs.Cardinality() >= maxKnownTxs {
+		p.knownTxs.Pop()
 	}
 	return p2p.Send(p.rw, TxMsg, txs)
 }
@@ -207,8 +211,12 @@ func (p *peer) SendTransactions(txs types.Transactions) error {
 func (p *peer) AsyncSendTransactions(txs []*types.Transaction) {
 	select {
 	case p.queuedTxs <- txs:
+		// Mark all the transactions as known, but ensure we don't overflow our limits
 		for _, tx := range txs {
 			p.knownTxs.Add(tx.Hash())
+		}
+		for p.knownTxs.Cardinality() >= maxKnownTxs {
+			p.knownTxs.Pop()
 		}
 	default:
 		p.Log().Debug("Dropping transaction propagation", "count", len(txs))
@@ -218,8 +226,12 @@ func (p *peer) AsyncSendTransactions(txs []*types.Transaction) {
 // SendNewBlockHashes announces the availability of a number of blocks through
 // a hash notification.
 func (p *peer) SendNewBlockHashes(hashes []common.Hash, numbers []uint64) error {
+	// Mark all the block hashes as known, but ensure we don't overflow our limits
 	for _, hash := range hashes {
 		p.knownBlocks.Add(hash)
+	}
+	for p.knownBlocks.Cardinality() >= maxKnownBlocks {
+		p.knownBlocks.Pop()
 	}
 	request := make(newBlockHashesData, len(hashes))
 	for i := 0; i < len(hashes); i++ {
@@ -235,7 +247,11 @@ func (p *peer) SendNewBlockHashes(hashes []common.Hash, numbers []uint64) error 
 func (p *peer) AsyncSendNewBlockHash(block *types.Block) {
 	select {
 	case p.queuedAnns <- block:
+		// Mark all the block hash as known, but ensure we don't overflow our limits
 		p.knownBlocks.Add(block.Hash())
+		for p.knownBlocks.Cardinality() >= maxKnownBlocks {
+			p.knownBlocks.Pop()
+		}
 	default:
 		p.Log().Debug("Dropping block announcement", "number", block.NumberU64(), "hash", block.Hash())
 	}
@@ -243,7 +259,11 @@ func (p *peer) AsyncSendNewBlockHash(block *types.Block) {
 
 // SendNewBlock propagates an entire block to a remote peer.
 func (p *peer) SendNewBlock(block *types.Block, td *big.Int) error {
+	// Mark all the block hash as known, but ensure we don't overflow our limits
 	p.knownBlocks.Add(block.Hash())
+	for p.knownBlocks.Cardinality() >= maxKnownBlocks {
+		p.knownBlocks.Pop()
+	}
 	return p2p.Send(p.rw, NewBlockMsg, []interface{}{block, td})
 }
 
@@ -252,7 +272,11 @@ func (p *peer) SendNewBlock(block *types.Block, td *big.Int) error {
 func (p *peer) AsyncSendNewBlock(block *types.Block, td *big.Int) {
 	select {
 	case p.queuedProps <- &propEvent{block: block, td: td}:
+		// Mark all the block hash as known, but ensure we don't overflow our limits
 		p.knownBlocks.Add(block.Hash())
+		for p.knownBlocks.Cardinality() >= maxKnownBlocks {
+			p.knownBlocks.Pop()
+		}
 	default:
 		p.Log().Debug("Dropping block propagation", "number", block.NumberU64(), "hash", block.Hash())
 	}
@@ -370,8 +394,8 @@ func (p *peer) readStatus(network uint64, status *statusData, genesis common.Has
 	if msg.Code != StatusMsg {
 		return errResp(ErrNoStatusMsg, "first msg has code %x (!= %x)", msg.Code, StatusMsg)
 	}
-	if msg.Size > ProtocolMaxMsgSize {
-		return errResp(ErrMsgTooLarge, "%v > %v", msg.Size, ProtocolMaxMsgSize)
+	if msg.Size > protocolMaxMsgSize {
+		return errResp(ErrMsgTooLarge, "%v > %v", msg.Size, protocolMaxMsgSize)
 	}
 	// Decode the handshake and make sure everything matches
 	if err := msg.Decode(&status); err != nil {

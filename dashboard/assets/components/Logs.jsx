@@ -1,24 +1,25 @@
 // @flow
 
-// Copyright 2018 The go-etherzero Authors
-// This file is part of the go-etherzero library.
+// Copyright 2018 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-etherzero library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-etherzero library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-etherzero library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 import React, {Component} from 'react';
 
-import List, {ListItem} from 'material-ui/List';
+import List from '@material-ui/core/List';
+import ListItem from '@material-ui/core/ListItem';
 import escapeHtml from 'escape-html';
 import type {Record, Content, LogsMessage, Logs as LogsType} from '../types/content';
 
@@ -104,9 +105,9 @@ const createChunk = (records: Array<Record>) => {
 
 // ADDED, SAME and REMOVED are used to track the change of the log chunk array.
 // The scroll position is set using these values.
-const ADDED = 1;
-const SAME = 0;
-const REMOVED = -1;
+export const ADDED = 1;
+export const SAME = 0;
+export const REMOVED = -1;
 
 // inserter is a state updater function for the main component, which inserts the new log chunk into the chunk array.
 // limit is the maximum length of the chunk array, used in order to prevent the browser from OOM.
@@ -166,7 +167,7 @@ export const inserter = (limit: number) => (update: LogsMessage, prev: LogsType)
 // styles contains the constant styles of the component.
 const styles = {
 	logListItem: {
-		padding: 0,
+		padding:    0,
 		lineHeight: 1.231,
 	},
 	logChunk: {
@@ -251,15 +252,15 @@ class Logs extends Component<Props, State> {
 	// atBottom checks if the scroll position it at the bottom of the container.
 	atBottom = () => {
 		const {container} = this.props;
-		return container.scrollHeight - container.scrollTop <=
-			container.clientHeight + container.scrollHeight * requestBand;
+		return container.scrollHeight - container.scrollTop
+			<= container.clientHeight + container.scrollHeight * requestBand;
 	};
 
 	// beforeUpdate is called by the parent component, saves the previous scroll position
 	// and the height of the first log chunk, which can be deleted during the insertion.
 	beforeUpdate = () => {
 		let firstHeight = 0;
-		let chunkList = this.content.children[1];
+		const chunkList = this.content.children[1];
 		if (chunkList && chunkList.children[0]) {
 			firstHeight = chunkList.children[0].clientHeight;
 		}

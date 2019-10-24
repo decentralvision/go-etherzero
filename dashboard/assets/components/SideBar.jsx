@@ -1,28 +1,31 @@
 // @flow
 
-// Copyright 2017 The go-etherzero Authors
-// This file is part of the go-etherzero library.
+// Copyright 2017 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-etherzero library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-etherzero library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-etherzero library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 import React, {Component} from 'react';
 
-import withStyles from 'material-ui/styles/withStyles';
-import List, {ListItem, ListItemIcon, ListItemText} from 'material-ui/List';
-import Icon from 'material-ui/Icon';
+import withStyles from '@material-ui/core/styles/withStyles';
+import List from '@material-ui/core/List';
+import ListItem from '@material-ui/core/ListItem';
+import ListItemIcon from '@material-ui/core/ListItemIcon';
+import ListItemText from '@material-ui/core/ListItemText';
+import Icon from '@material-ui/core/Icon';
 import Transition from 'react-transition-group/Transition';
-import {Icon as FontAwesome} from 'react-fa';
+import {FontAwesomeIcon} from '@fortawesome/react-fontawesome';
 
 import {MENU, DURATION} from '../common';
 
@@ -48,6 +51,7 @@ const themeStyles = theme => ({
 	},
 	icon: {
 		fontSize: theme.spacing.unit * 3,
+		overflow: 'unset',
 	},
 });
 
@@ -57,9 +61,11 @@ export type Props = {
 	changeContent: string => void,
 };
 
+type State = {}
+
 // SideBar renders the sidebar of the dashboard.
-class SideBar extends Component<Props> {
-	shouldComponentUpdate(nextProps) {
+class SideBar extends Component<Props, State> {
+	shouldComponentUpdate(nextProps: Readonly<Props>, nextState: Readonly<State>, nextContext: any) {
 		return nextProps.opened !== this.props.opened;
 	}
 
@@ -78,7 +84,7 @@ class SideBar extends Component<Props> {
 				<ListItem button key={menu.id} onClick={this.clickOn(menu.id)} className={classes.listItem}>
 					<ListItemIcon>
 						<Icon className={classes.icon}>
-							<FontAwesome name={menu.icon} />
+							<FontAwesomeIcon icon={menu.icon} />
 						</Icon>
 					</ListItemIcon>
 					<ListItemText

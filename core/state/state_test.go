@@ -1,18 +1,18 @@
-// Copyright 2014 The go-etherzero Authors
-// This file is part of the go-etherzero library.
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-etherzero library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-etherzero library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-etherzero library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package state
 
@@ -21,14 +21,15 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/etherzero/go-etherzero/common"
-	"github.com/etherzero/go-etherzero/crypto"
-	"github.com/etherzero/go-etherzero/ethdb"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 	checker "gopkg.in/check.v1"
 )
 
 type StateSuite struct {
-	db    *ethdb.MemDatabase
+	db    ethdb.Database
 	state *StateDB
 }
 
@@ -51,33 +52,28 @@ func (s *StateSuite) TestDump(c *checker.C) {
 	s.state.Commit(false)
 
 	// check that dump contains the state objects that are in trie
-	got := string(s.state.Dump())
+	got := string(s.state.Dump(false, false, true))
 	want := `{
     "root": "71edff0130dd2385947095001c73d9e28d862fc286fca2b922ca6f6f3cddfdd2",
     "accounts": {
-        "0000000000000000000000000000000000000001": {
+        "0x0000000000000000000000000000000000000001": {
             "balance": "22",
             "nonce": 0,
             "root": "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
-            "codeHash": "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
-            "code": "",
-            "storage": {}
+            "codeHash": "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
         },
-        "0000000000000000000000000000000000000002": {
+        "0x0000000000000000000000000000000000000002": {
             "balance": "44",
             "nonce": 0,
             "root": "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
-            "codeHash": "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
-            "code": "",
-            "storage": {}
+            "codeHash": "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
         },
-        "0000000000000000000000000000000000000102": {
+        "0x0000000000000000000000000000000000000102": {
             "balance": "0",
             "nonce": 0,
             "root": "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
             "codeHash": "87874902497a5bb968da31a2998d8f22e949d1ef6214bcdedd8bae24cca4b9e3",
-            "code": "03030303030303",
-            "storage": {}
+            "code": "03030303030303"
         }
     }
 }`
@@ -87,7 +83,7 @@ func (s *StateSuite) TestDump(c *checker.C) {
 }
 
 func (s *StateSuite) SetUpTest(c *checker.C) {
-	s.db = ethdb.NewMemDatabase()
+	s.db = rawdb.NewMemoryDatabase()
 	s.state, _ = New(common.Hash{}, NewDatabase(s.db))
 }
 
@@ -141,7 +137,7 @@ func (s *StateSuite) TestSnapshotEmpty(c *checker.C) {
 // use testing instead of checker because checker does not support
 // printing/logging in tests (-check.vv does not work)
 func TestSnapshot2(t *testing.T) {
-	state, _ := New(common.Hash{}, NewDatabase(ethdb.NewMemDatabase()))
+	state, _ := New(common.Hash{}, NewDatabase(rawdb.NewMemoryDatabase()))
 
 	stateobjaddr0 := toAddr([]byte("so0"))
 	stateobjaddr1 := toAddr([]byte("so1"))

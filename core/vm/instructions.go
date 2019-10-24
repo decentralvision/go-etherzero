@@ -1,30 +1,29 @@
-// Copyright 2015 The go-etherzero Authors
-// This file is part of the go-etherzero library.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-etherzero library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-etherzero library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-etherzero library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package vm
 
 import (
 	"errors"
-	"fmt"
 	"math/big"
 
-	"github.com/etherzero/go-etherzero/common"
-	"github.com/etherzero/go-etherzero/common/math"
-	"github.com/etherzero/go-etherzero/core/types"
-	"github.com/etherzero/go-etherzero/params"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/params"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -35,6 +34,7 @@ var (
 	errReturnDataOutOfBounds = errors.New("evm: return data out of bounds")
 	errExecutionReverted     = errors.New("evm: execution reverted")
 	errMaxCodeSizeExceeded   = errors.New("evm: max code size exceeded")
+	errInvalidJump           = errors.New("evm: invalid jump destination")
 )
 
 func opAdd(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
@@ -405,7 +405,7 @@ func opSha3(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory 
 }
 
 func opAddress(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	stack.push(contract.Address().Big())
+	stack.push(interpreter.intPool.get().SetBytes(contract.Address().Bytes()))
 	return nil, nil
 }
 
@@ -416,12 +416,12 @@ func opBalance(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memo
 }
 
 func opOrigin(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	stack.push(interpreter.evm.Origin.Big())
+	stack.push(interpreter.intPool.get().SetBytes(interpreter.evm.Origin.Bytes()))
 	return nil, nil
 }
 
 func opCaller(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	stack.push(contract.Caller().Big())
+	stack.push(interpreter.intPool.get().SetBytes(contract.Caller().Bytes()))
 	return nil, nil
 }
 
@@ -467,7 +467,7 @@ func opReturnDataCopy(pc *uint64, interpreter *EVMInterpreter, contract *Contrac
 	)
 	defer interpreter.intPool.put(memOffset, dataOffset, length, end)
 
-	if end.BitLen() > 64 || uint64(len(interpreter.returnData)) < end.Uint64() {
+	if !end.IsUint64() || uint64(len(interpreter.returnData)) < end.Uint64() {
 		return nil, errReturnDataOutOfBounds
 	}
 	memory.Set(memOffset.Uint64(), length.Uint64(), interpreter.returnData[dataOffset.Uint64():end.Uint64()])
@@ -572,7 +572,7 @@ func opBlockhash(pc *uint64, interpreter *EVMInterpreter, contract *Contract, me
 }
 
 func opCoinbase(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
-	stack.push(interpreter.evm.Coinbase.Big())
+	stack.push(interpreter.intPool.get().SetBytes(interpreter.evm.Coinbase.Bytes()))
 	return nil, nil
 }
 
@@ -645,8 +645,7 @@ func opSstore(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memor
 func opJump(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	pos := stack.pop()
 	if !contract.validJumpdest(pos) {
-		nop := contract.GetOp(pos.Uint64())
-		return nil, fmt.Errorf("invalid jump destination (%v) %v", nop, pos)
+		return nil, errInvalidJump
 	}
 	*pc = pos.Uint64()
 
@@ -658,8 +657,7 @@ func opJumpi(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory
 	pos, cond := stack.pop(), stack.pop()
 	if cond.Sign() != 0 {
 		if !contract.validJumpdest(pos) {
-			nop := contract.GetOp(pos.Uint64())
-			return nil, fmt.Errorf("invalid jump destination (%v) %v", nop, pos)
+			return nil, errInvalidJump
 		}
 		*pc = pos.Uint64()
 	} else {
@@ -696,7 +694,7 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memor
 		input        = memory.Get(offset.Int64(), size.Int64())
 		gas          = contract.Gas
 	)
-	if interpreter.evm.ChainConfig().IsEIP150(interpreter.evm.BlockNumber) {
+	if interpreter.evm.chainRules.IsEIP150 {
 		gas -= gas / 64
 	}
 
@@ -706,12 +704,12 @@ func opCreate(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memor
 	// homestead we must check for CodeStoreOutOfGasError (homestead only
 	// rule) and treat as an error, if the ruleset is frontier we must
 	// ignore this error and pretend the operation was successful.
-	if interpreter.evm.ChainConfig().IsHomestead(interpreter.evm.BlockNumber) && suberr == ErrCodeStoreOutOfGas {
+	if interpreter.evm.chainRules.IsHomestead && suberr == ErrCodeStoreOutOfGas {
 		stack.push(interpreter.intPool.getZero())
 	} else if suberr != nil && suberr != ErrCodeStoreOutOfGas {
 		stack.push(interpreter.intPool.getZero())
 	} else {
-		stack.push(addr.Big())
+		stack.push(interpreter.intPool.get().SetBytes(addr.Bytes()))
 	}
 	contract.Gas += returnGas
 	interpreter.intPool.put(value, offset, size)
@@ -739,7 +737,7 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memo
 	if suberr != nil {
 		stack.push(interpreter.intPool.getZero())
 	} else {
-		stack.push(addr.Big())
+		stack.push(interpreter.intPool.get().SetBytes(addr.Bytes()))
 	}
 	contract.Gas += returnGas
 	interpreter.intPool.put(endowment, offset, size, salt)
@@ -763,9 +761,6 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory 
 
 	if value.Sign() != 0 {
 		gas += params.CallStipend
-	}
-	if value.Cmp(common.Big0) > 0 {
-		interpreter.evm.StateDB.AddIntx(contract.Address(), toAddr, value)
 	}
 	ret, returnGas, err := interpreter.evm.Call(contract, toAddr, args, gas, value)
 	if err != nil {
@@ -883,7 +878,7 @@ func opStop(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory 
 
 func opSuicide(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
 	balance := interpreter.evm.StateDB.GetBalance(contract.Address())
-	interpreter.evm.StateDB.AddBalance(common.BigToAddress(stack.pop()), balance, interpreter.evm.BlockNumber)
+	interpreter.evm.StateDB.AddBalance(common.BigToAddress(stack.pop()), balance)
 
 	interpreter.evm.StateDB.Suicide(contract.Address())
 	return nil, nil
@@ -913,6 +908,21 @@ func makeLog(size int) executionFunc {
 		interpreter.intPool.put(mStart, mSize)
 		return nil, nil
 	}
+}
+
+// opPush1 is a specialized version of pushN
+func opPush1(pc *uint64, interpreter *EVMInterpreter, contract *Contract, memory *Memory, stack *Stack) ([]byte, error) {
+	var (
+		codeLen = uint64(len(contract.Code))
+		integer = interpreter.intPool.get()
+	)
+	*pc += 1
+	if *pc < codeLen {
+		stack.push(integer.SetUint64(uint64(contract.Code[*pc])))
+	} else {
+		stack.push(integer.SetUint64(0))
+	}
+	return nil, nil
 }
 
 // make push instruction function

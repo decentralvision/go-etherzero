@@ -1,27 +1,28 @@
-// Copyright 2016 The go-etherzero Authors
-// This file is part of the go-etherzero library.
+// Copyright 2016 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-etherzero library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-etherzero library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-etherzero library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package les
 
 import (
+	"context"
 	"sync"
 
-	"github.com/etherzero/go-etherzero/common"
-	"github.com/etherzero/go-etherzero/core/types"
-	"github.com/etherzero/go-etherzero/rlp"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 type ltrInfo struct {
@@ -29,36 +30,42 @@ type ltrInfo struct {
 	sentTo map[*peer]struct{}
 }
 
-type LesTxRelay struct {
+type lesTxRelay struct {
 	txSent       map[common.Hash]*ltrInfo
 	txPending    map[common.Hash]struct{}
 	ps           *peerSet
 	peerList     []*peer
 	peerStartPos int
 	lock         sync.RWMutex
+	stop         chan struct{}
 
-	reqDist *requestDistributor
+	retriever *retrieveManager
 }
 
-func NewLesTxRelay(ps *peerSet, reqDist *requestDistributor) *LesTxRelay {
-	r := &LesTxRelay{
+func newLesTxRelay(ps *peerSet, retriever *retrieveManager) *lesTxRelay {
+	r := &lesTxRelay{
 		txSent:    make(map[common.Hash]*ltrInfo),
 		txPending: make(map[common.Hash]struct{}),
 		ps:        ps,
-		reqDist:   reqDist,
+		retriever: retriever,
+		stop:      make(chan struct{}),
 	}
 	ps.notify(r)
 	return r
 }
 
-func (self *LesTxRelay) registerPeer(p *peer) {
+func (self *lesTxRelay) Stop() {
+	close(self.stop)
+}
+
+func (self *lesTxRelay) registerPeer(p *peer) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 
 	self.peerList = self.ps.AllPeers()
 }
 
-func (self *LesTxRelay) unregisterPeer(p *peer) {
+func (self *lesTxRelay) unregisterPeer(p *peer) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 
@@ -67,7 +74,7 @@ func (self *LesTxRelay) unregisterPeer(p *peer) {
 
 // send sends a list of transactions to at most a given number of peers at
 // once, never resending any particular transaction to the same peer twice
-func (self *LesTxRelay) send(txs types.Transactions, count int) {
+func (self *lesTxRelay) send(txs types.Transactions, count int) {
 	sendTo := make(map[*peer]types.Transactions)
 
 	self.peerStartPos++ // rotate the starting position of the peer list
@@ -123,27 +130,27 @@ func (self *LesTxRelay) send(txs types.Transactions, count int) {
 				return peer.GetTxRelayCost(len(ll), len(enc))
 			},
 			canSend: func(dp distPeer) bool {
-				return dp.(*peer) == pp
+				return !dp.(*peer).onlyAnnounce && dp.(*peer) == pp
 			},
 			request: func(dp distPeer) func() {
 				peer := dp.(*peer)
 				cost := peer.GetTxRelayCost(len(ll), len(enc))
-				peer.fcServer.QueueRequest(reqID, cost)
+				peer.fcServer.QueuedRequest(reqID, cost)
 				return func() { peer.SendTxs(reqID, cost, enc) }
 			},
 		}
-		self.reqDist.queue(rq)
+		go self.retriever.retrieve(context.Background(), reqID, rq, func(p distPeer, msg *Msg) error { return nil }, self.stop)
 	}
 }
 
-func (self *LesTxRelay) Send(txs types.Transactions) {
+func (self *lesTxRelay) Send(txs types.Transactions) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 
 	self.send(txs, 3)
 }
 
-func (self *LesTxRelay) NewHead(head common.Hash, mined []common.Hash, rollback []common.Hash) {
+func (self *lesTxRelay) NewHead(head common.Hash, mined []common.Hash, rollback []common.Hash) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 
@@ -166,7 +173,7 @@ func (self *LesTxRelay) NewHead(head common.Hash, mined []common.Hash, rollback 
 	}
 }
 
-func (self *LesTxRelay) Discard(hashes []common.Hash) {
+func (self *lesTxRelay) Discard(hashes []common.Hash) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 

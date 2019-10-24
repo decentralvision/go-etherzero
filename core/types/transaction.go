@@ -1,18 +1,18 @@
-// Copyright 2014 The go-etherzero Authors
-// This file is part of the go-etherzero library.
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-etherzero library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-etherzero library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-etherzero library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package types
 
@@ -23,10 +23,10 @@ import (
 	"math/big"
 	"sync/atomic"
 
-	"github.com/etherzero/go-etherzero/common"
-	"github.com/etherzero/go-etherzero/common/hexutil"
-	"github.com/etherzero/go-etherzero/crypto"
-	"github.com/etherzero/go-etherzero/rlp"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 //go:generate gencodec -type txdata -field-override txdataMarshaling -out gen_tx_json.go
@@ -246,14 +246,15 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 }
 
 // Cost returns amount + gasprice * gaslimit.
-// why
 func (tx *Transaction) Cost() *big.Int {
 	total := new(big.Int).Mul(tx.data.Price, new(big.Int).SetUint64(tx.data.GasLimit))
-	// total.Add(total, tx.data.Amount)
+	total.Add(total, tx.data.Amount)
 	return total
 }
 
-func (tx *Transaction) RawSignatureValues() (*big.Int, *big.Int, *big.Int) {
+// RawSignatureValues returns the V, R, S signature values of the transaction.
+// The return values should not be modified by the caller.
+func (tx *Transaction) RawSignatureValues() (v, r, s *big.Int) {
 	return tx.data.V, tx.data.R, tx.data.S
 }
 

@@ -1,18 +1,18 @@
-// Copyright 2017 The go-etherzero Authors
-// This file is part of the go-etherzero library.
+// Copyright 2017 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-etherzero library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-etherzero library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-etherzero library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package ethash
 
@@ -24,15 +24,15 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/deckarep/golang-set"
-	"github.com/etherzero/go-etherzero/common"
-	"github.com/etherzero/go-etherzero/common/math"
-	"github.com/etherzero/go-etherzero/consensus"
-	"github.com/etherzero/go-etherzero/consensus/misc"
-	"github.com/etherzero/go-etherzero/core/state"
-	"github.com/etherzero/go-etherzero/core/types"
-	"github.com/etherzero/go-etherzero/params"
-	"github.com/etherzero/go-etherzero/rlp"
+	mapset "github.com/deckarep/golang-set"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/misc"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -190,6 +190,9 @@ func (ethash *Ethash) VerifyUncles(chain consensus.ChainReader, block *types.Blo
 	// Verify that there are at most 2 uncles included in this block
 	if len(block.Uncles()) > maxUncles {
 		return errTooManyUncles
+	}
+	if len(block.Uncles()) == 0 {
+		return nil
 	}
 	// Gather the set of past uncles and ancestors
 	uncles, ancestors := mapset.NewSet(), make(map[common.Hash]*types.Header)
@@ -558,8 +561,16 @@ func (ethash *Ethash) Prepare(chain consensus.ChainReader, header *types.Header)
 }
 
 // Finalize implements consensus.Engine, accumulating the block and uncle rewards,
-// setting the final state and assembling the block.
-func (ethash *Ethash) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
+// setting the final state on the header
+func (ethash *Ethash) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
+	// Accumulate any block and uncle rewards and commit the final state root
+	accumulateRewards(chain.Config(), state, header, uncles)
+	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+}
+
+// FinalizeAndAssemble implements consensus.Engine, accumulating the block and
+// uncle rewards, setting the final state and assembling the block.
+func (ethash *Ethash) FinalizeAndAssemble(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
 	// Accumulate any block and uncle rewards and commit the final state root
 	accumulateRewards(chain.Config(), state, header, uncles)
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
@@ -617,10 +628,10 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		r.Sub(r, header.Number)
 		r.Mul(r, blockReward)
 		r.Div(r, big8)
-		state.AddBalance(uncle.Coinbase, r, header.Number)
+		state.AddBalance(uncle.Coinbase, r)
 
 		r.Div(blockReward, big32)
 		reward.Add(reward, r)
 	}
-	state.AddBalance(header.Coinbase, reward, header.Number)
+	state.AddBalance(header.Coinbase, reward)
 }
